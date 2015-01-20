@@ -1,0 +1,185 @@
+#!/usr/bin/env bash
+#
+# Manage node versions
+#
+# Author: Dave Eddy <dave@voxer.com>
+# Credits:
+#  @dshaw
+#  Jeff Biddick
+#  Mike Zeller
+# Date: 7/20/2012
+# License: MIT
+
+# url where tarballs are stored
+url='http://nodejs.org/dist'
+
+# dir where tarballs are cached
+dir=~/.nvadm
+
+# Builds are available for node v0.8.x and above
+# https://github.com/joyent/node/issues/4031
+builds_available_minor=8
+
+# sort semver... naive approach
+semversort() {
+	tr -d v | sort -t . -k1,1n -k2,2n -k3,3n
+}
+
+# extract node versions from the website
+versionfilter() {
+	awk '/^<a href="v/ { match($0, /(v[^\/]+)/); print substr($0, RSTART, RLENGTH); }'
+}
+
+# program usage
+usage() {
+	local prog=${0##*/}
+	cat <<-EOF
+	Usage: $prog <command> [options]
+
+	Manage Node.js versions
+
+	Commands
+	  list        list all possible node versions to install
+	  install     install a given version of node
+	  help        this message
+
+	Install Options
+	  -p <dir>    prefix dir, defaults to operating system prefix
+	  -v          verbose mode
+	  -z          dry-run, don't actually install anything
+
+	Examples
+	  list all available node versions
+	    $prog list
+
+	  install a specific version of node
+	    $prog install v0.8.8
+	    - defaults to x86 for the current operating system
+
+	  install node for a specific platform
+	    $prog install v0.8.8 x64 sunos
+	EOF
+}
+
+# list subcommand
+list() {
+	local versions=$(curl -sSL "$url" | versionfilter | semversort)
+	if (($? != 0)) || [[ -z $versions ]]; then
+		echo "Error getting list! ($url)" >&2
+		echo ':: DEBUG ::' >&2
+		echo "$versions" >&2
+		exit 1
+	fi
+
+	cat <<-EOF
+	current version
+
+	node: $(node -v 2>&1)
+	npm: $(npm -v 2>&1)
+
+	available versions: $url
+	EOF
+	local version current_minor major minor patch i=0
+	while read version; do
+		IFS=. read major minor patch <<< "${version#v}"
+		((minor >= builds_available_minor)) || continue
+
+		if [[ $minor != $current_minor ]]; then
+			echo -e "\n - node $major.$minor.x - "
+			i=0
+		fi
+
+		printf '%-10s' "v$version"
+		((++i % 6 == 0)) && echo
+		current_minor=$minor
+	done <<< "$versions"
+	echo
+}
+
+# install subcommand
+install() {
+	# sane defaults for install prefix
+	local uname=$(uname | tr '[[:upper:]]' '[[:lower:]]')
+	local prefix=
+	local verbose=false
+	local dryrun=false
+	case "$uname" in
+		sunos) prefix='/opt/local';;
+		*) prefix='/usr/local';;
+	esac
+
+	# command line arguments
+	while getopts 'hp:vz' option; do
+		case "$option" in
+			h) usage; exit 0;;
+			p) prefix=$OPTARG;;
+			v) verbose=true;;
+			z) dryrun=true;;
+			*) usage >&2; exit 1;;
+		esac
+	done
+	shift "$((OPTIND - 1))"
+
+	local version=$1
+	local arch=${2:-x86}
+	local uname=${3:-$uname}
+	if [[ -z $version ]]; then
+		echo 'version must be specified' >&2
+		usage >&2
+		exit 1
+	fi
+
+	local remote_tarball=$url/$version/node-$version-$uname-$arch.tar.gz
+	local local_tarball=$dir/node-$version-$uname-$arch.tar.gz
+
+	# ensure the tarball is present
+	echo "using cache dir ${dir/#$HOME/\~}"
+	mkdir -p "$dir"
+	if [[ -f $local_tarball ]]; then
+		echo "tarball ${local_tarball/#$HOME/\~} found... using cached version"
+	else
+		echo -n "downloading $remote_tarball... "
+		if curl -sS "$remote_tarball" -o "$local_tarball" && [[ -s $local_tarball ]]; then
+			echo 'done'
+		else
+			echo 'failed!'
+			exit 1
+		fi
+	fi
+
+	# install the tarball
+	echo "installing ${local_tarball/#$HOME/\~} to $prefix"
+	mkdir -p "$prefix"
+
+	# build the tar command
+	local opts=(--no-same-owner --strip-components=1 -xz)
+	$verbose && opts+=(-v)
+	opts+=(-f "$local_tarball" -C "$prefix")
+
+	echo "running: tar ${opts[*]}"
+	$dryrun && echo 'DRY RUN: exiting' && exit 0
+
+	if tar "${opts[@]}"; then
+		echo 'done!'
+		cat <<-EOF
+
+		installed!
+
+		$prefix/bin/node: $("$prefix/bin/node" -v 2>&1)
+		$prefix/bin/npm: $("$prefix/bin/npm" -v 2>&1)
+		EOF
+	else
+		echo 'failed!!' >&2
+		exit 2
+	fi
+}
+
+# command line operands
+command=$1
+shift
+case "$command" in
+	list|ls) list;;
+	install|in) install "$@";;
+	-h|--help|help) usage; exit 0;;
+	*) usage >&2; exit 1;;
+esac
