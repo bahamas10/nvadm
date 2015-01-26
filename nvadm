@@ -157,10 +157,12 @@ install() {
 	opts+=(-f "$local_tarball" -C "$prefix")
 
 	echo "running: tar ${opts[*]}"
-	$dryrun && echo 'DRY RUN: exiting' && exit 0
+	if $dryrun; then
+		echo 'DRY RUN: exiting'
+		exit 0
+	fi
 
 	if tar "${opts[@]}"; then
-		echo 'done!'
 		cat <<-EOF
 
 		installed!
