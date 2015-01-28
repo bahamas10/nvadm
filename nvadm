@@ -99,7 +99,7 @@ list() {
 # install subcommand
 install() {
 	# sane defaults for install prefix
-	local uname=$(uname | tr '[[:upper:]]' '[[:lower:]]')
+	local uname=$(uname | tr '[:upper:]' '[:lower:]')
 	local prefix=
 	local verbose=false
 	local dryrun=false
