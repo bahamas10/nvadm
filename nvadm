@@ -82,7 +82,7 @@ list() {
 	local version current_minor major minor patch i=0
 	while read version; do
 		IFS=. read major minor patch <<< "${version#v}"
-		((minor >= builds_available_minor)) || continue
+		((major > 0 || minor >= builds_available_minor)) || continue
 
 		if [[ $minor != $current_minor ]]; then
 			echo -e "\n - node $major.$minor.x - "
