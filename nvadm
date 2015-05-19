@@ -11,7 +11,7 @@
 # License: MIT
 
 # url where tarballs are stored
-url='http://nodejs.org/dist'
+url=${NVADM_URL:-http://nodejs.org/dist}
 
 # dir where tarballs are cached
 dir=~/.nvadm
