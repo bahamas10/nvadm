@@ -16,6 +16,10 @@ url=${NVADM_URL:-http://nodejs.org/dist}
 # dir where tarballs are cached
 dir=~/.nvadm
 
+# tar executable
+tar='tar'
+gtar --help &>/dev/null && tar='gtar'
+
 # Builds are available for node v0.8.x and above
 # https://github.com/joyent/node/issues/4031
 builds_available_minor=8
@@ -162,7 +166,7 @@ install() {
 		exit 0
 	fi
 
-	if tar "${opts[@]}"; then
+	if "$tar" "${opts[@]}"; then
 		cat <<-EOF
 
 		installed!
